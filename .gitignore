@@ -1,0 +1,16 @@
+# Local secrets and credentials
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12
+secrets.json
+local.settings.json
+
+# Generated infrastructure outputs
+infra/**/*.json
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

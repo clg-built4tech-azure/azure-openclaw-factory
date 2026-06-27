@@ -1,0 +1,53 @@
+name: openclaw-infra
+
+on:
+  workflow_dispatch:
+    inputs:
+      location:
+        description: Azure region for all resources
+        required: true
+        default: eastus
+      acr_sku:
+        description: Azure Container Registry SKU
+        required: true
+        default: Basic
+      service_principal_object_id:
+        description: Object ID of the GitHub Actions service principal
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ACR_NAME: ocrocagentdev
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Provision services
+        run: |
+          az deployment sub create \
+            --name openclaw-services-${{ github.run_number }} \
+            --location "${{ inputs.location }}" \
+            --template-file infra/bicep/main.bicep \
+            --parameters location="${{ inputs.location }}" acrSku="${{ inputs.acr_sku }}" acrName="${ACR_NAME}"
+
+      - name: Provision IAM
+        run: |
+          az deployment sub create \
+            --name openclaw-iam-${{ github.run_number }} \
+            --location "${{ inputs.location }}" \
+            --template-file infra/iam/rbac.bicep \
+            --parameters servicePrincipalObjectId="${{ inputs.service_principal_object_id }}" acrName="${ACR_NAME}"

@@ -1,0 +1,9 @@
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "ollama/nemotron-3-super:cloud"
+      }
+    }
+  }
+}

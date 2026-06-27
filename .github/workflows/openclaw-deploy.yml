@@ -1,0 +1,157 @@
+name: openclaw-deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - agents/**
+      - smoke-tests/**
+      - .github/workflows/openclaw-deploy.yml
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ACR_NAME: ocrocagentdev
+  RESOURCE_GROUP_DEV: rg-openclaw-dev
+  RESOURCE_GROUP_PROD: rg-openclaw-prod
+  IMAGE_TAG: oc-${{ github.sha }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        agent: [hermes, analyst]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        run: az acr login --name "${ACR_NAME}"
+
+      - name: Build and push image
+        run: |
+          ACR_LOGIN_SERVER=$(az acr show --name "${ACR_NAME}" --query loginServer -o tsv)
+          IMAGE="${ACR_LOGIN_SERVER}/${{ matrix.agent }}:${IMAGE_TAG}"
+          docker build --pull -t "${IMAGE}" "agents/${{ matrix.agent }}"
+          docker push "${IMAGE}"
+
+  deploy-dev:
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      matrix:
+        agent: [hermes, analyst]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy dev Container App
+        run: |
+          ACR_LOGIN_SERVER=$(az acr show --name "${ACR_NAME}" --query loginServer -o tsv)
+          ACR_USERNAME=$(az acr credential show --name "${ACR_NAME}" --query username -o tsv)
+          ACR_PASSWORD=$(az acr credential show --name "${ACR_NAME}" --query "passwords[0].value" -o tsv)
+          echo "::add-mask::${ACR_PASSWORD}"
+
+          APP="${{ matrix.agent }}-dev"
+          IMAGE="${ACR_LOGIN_SERVER}/${{ matrix.agent }}:${IMAGE_TAG}"
+
+          az containerapp registry set \
+            --name "${APP}" \
+            --resource-group "${RESOURCE_GROUP_DEV}" \
+            --server "${ACR_LOGIN_SERVER}" \
+            --username "${ACR_USERNAME}" \
+            --password "${ACR_PASSWORD}"
+
+          az containerapp secret set \
+            --name "${APP}" \
+            --resource-group "${RESOURCE_GROUP_DEV}" \
+            --secrets openclaw-gateway-token="${{ secrets.OPENCLAW_GATEWAY_TOKEN }}"
+
+          az containerapp update \
+            --name "${APP}" \
+            --resource-group "${RESOURCE_GROUP_DEV}" \
+            --image "${IMAGE}" \
+            --set-env-vars AGENT_NAME="${{ matrix.agent }}" PORT=8080 OPENCLAW_GATEWAY_PORT=19001 OPENCLAW_GATEWAY_TOKEN=secretref:openclaw-gateway-token
+
+      - name: Smoke test dev
+        run: |
+          FQDN=$(az containerapp show \
+            --name "${{ matrix.agent }}-dev" \
+            --resource-group "${RESOURCE_GROUP_DEV}" \
+            --query properties.configuration.ingress.fqdn \
+            -o tsv)
+          bash smoke-tests/smoke-dev.sh "${{ matrix.agent }}" "${FQDN}"
+
+  deploy-prod:
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    environment: prod
+    strategy:
+      matrix:
+        agent: [hermes, analyst]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy prod Container App
+        run: |
+          ACR_LOGIN_SERVER=$(az acr show --name "${ACR_NAME}" --query loginServer -o tsv)
+          ACR_USERNAME=$(az acr credential show --name "${ACR_NAME}" --query username -o tsv)
+          ACR_PASSWORD=$(az acr credential show --name "${ACR_NAME}" --query "passwords[0].value" -o tsv)
+          echo "::add-mask::${ACR_PASSWORD}"
+
+          APP="${{ matrix.agent }}-prod"
+          IMAGE="${ACR_LOGIN_SERVER}/${{ matrix.agent }}:${IMAGE_TAG}"
+
+          az containerapp registry set \
+            --name "${APP}" \
+            --resource-group "${RESOURCE_GROUP_PROD}" \
+            --server "${ACR_LOGIN_SERVER}" \
+            --username "${ACR_USERNAME}" \
+            --password "${ACR_PASSWORD}"
+
+          az containerapp secret set \
+            --name "${APP}" \
+            --resource-group "${RESOURCE_GROUP_PROD}" \
+            --secrets openclaw-gateway-token="${{ secrets.OPENCLAW_GATEWAY_TOKEN }}"
+
+          az containerapp update \
+            --name "${APP}" \
+            --resource-group "${RESOURCE_GROUP_PROD}" \
+            --image "${IMAGE}" \
+            --set-env-vars AGENT_NAME="${{ matrix.agent }}" PORT=8080 OPENCLAW_GATEWAY_PORT=19001 OPENCLAW_GATEWAY_TOKEN=secretref:openclaw-gateway-token
+
+      - name: Smoke test prod
+        run: |
+          FQDN=$(az containerapp show \
+            --name "${{ matrix.agent }}-prod" \
+            --resource-group "${RESOURCE_GROUP_PROD}" \
+            --query properties.configuration.ingress.fqdn \
+            -o tsv)
+          bash smoke-tests/smoke-prod.sh "${{ matrix.agent }}" "${FQDN}"
