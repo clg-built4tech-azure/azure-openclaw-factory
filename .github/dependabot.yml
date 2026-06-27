@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "github-actions"]
+
+  - package-ecosystem: "docker"
+    directories:
+      - "/agents/analyst"
+      - "/agents/hermes"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "docker"]
