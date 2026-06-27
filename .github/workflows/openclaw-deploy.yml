@@ -1,13 +1,6 @@
 name: openclaw-deploy
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - agents/**
-      - smoke-tests/**
-      - .github/workflows/openclaw-deploy.yml
   workflow_dispatch:
 
 permissions:
