@@ -43,7 +43,7 @@ smoke-tests/
 
 ## Prerequisites
 
-- GitHub admin access to `clgintellicloud-hub/azure-openclaw-factory`
+- GitHub admin access to `clg-built4tech-azure/azure-openclaw-factory`
 - Azure subscription access with permission to create resource groups, ACR, Container Apps, Log Analytics, and role assignments
 - An Entra ID app registration for GitHub Actions OIDC
 - Azure CLI for local setup tasks
@@ -68,7 +68,7 @@ Generate `OPENCLAW_GATEWAY_TOKEN` with a strong random value. Do not commit it t
 
 In your Entra ID app registration, add a federated credential:
 - **Issuer**: `https://token.actions.githubusercontent.com`
-- **Subject**: `repo:clgintellicloud-hub/azure-openclaw-factory:ref:refs/heads/main`
+- **Subject**: `repo:clg-built4tech-azure/azure-openclaw-factory:ref:refs/heads/main`
 - **Audience**: `api://AzureADTokenExchange`
 
 The same Entra ID app must have enough Azure permissions to run the infrastructure and deployment workflows.
