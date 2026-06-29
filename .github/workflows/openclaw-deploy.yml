@@ -21,7 +21,7 @@ jobs:
         agent: [hermes, analyst]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Azure login
         uses: azure/login@v3
@@ -48,7 +48,7 @@ jobs:
         agent: [hermes, analyst]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Azure login
         uses: azure/login@v3
@@ -103,7 +103,7 @@ jobs:
         agent: [hermes, analyst]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Azure login
         uses: azure/login@v3
