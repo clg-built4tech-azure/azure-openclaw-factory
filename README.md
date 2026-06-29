@@ -2,12 +2,14 @@
 
 Staged deployment of OpenClaw AI agents to Azure Container Apps via GitHub Actions CI/CD.
 
-This repository builds agent-specific Docker images, pushes them to Azure Container Registry (ACR), deploys them to Azure Container Apps, validates dev with smoke tests, and promotes the same image tag to prod after approval.
+This repository builds agent-specific Docker images, pushes them to Azure Container Registry (ACR), deploys them to Azure Container Apps, enables A2A inter-app communication between agents, validates dev with smoke tests, and promotes the same image tag to prod after approval.
 
 ## Repository Structure
 
 ```
 agents/
+  common/                # Shared OpenClaw launcher and A2A HTTP endpoints
+    src/agent.js
   hermes/                # Hermes agent
     Dockerfile
     src/agent.js
@@ -102,6 +104,35 @@ Push to `main` or run the `openclaw-deploy` workflow manually. The flow is:
 
 Each agent image starts `openclaw gateway run` on internal port `19001` and exposes a small HTTP health endpoint on port `8080` for Azure Container Apps. The deployment stores `OPENCLAW_GATEWAY_TOKEN` as a Container App secret and passes it to OpenClaw at runtime.
 
+## Inter-App Communication / A2A
+
+Each Container App now exposes A2A-compatible HTTP endpoints from the shared launcher in `agents/common/src/agent.js`:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /.well-known/agent-card.json` | Public discovery document with agent metadata, skills, auth, and message endpoint |
+| `POST /message:send` | Authenticated A2A message send endpoint |
+| `POST /a2a` | Authenticated JSON-RPC compatibility endpoint for `message/send`, `tasks/get`, and `tasks/cancel` |
+| `GET /tasks` | Authenticated in-memory task list |
+| `GET /tasks/<id>` | Authenticated task lookup |
+| `POST /tasks/<id>/cancel` | Authenticated task cancellation |
+| `GET /a2a/peers` | Authenticated view of configured peer agents |
+
+The deployment enables Dapr on every Container App and uses Dapr service invocation for app-to-app calls inside the same Container Apps environment. The `A2A_PEER_NAMES` environment variable is generated during deployment from the fixed agents plus the configured generic OpenClaw app count.
+
+Authenticated A2A calls use the `A2A_SHARED_TOKEN` environment variable. The workflow sets it from the existing `OPENCLAW_GATEWAY_TOKEN` GitHub Actions secret, so no additional secret is committed or required by default.
+
+Example local A2A request:
+
+```bash
+curl -s http://localhost:18080/.well-known/agent-card.json
+
+curl -s http://localhost:18080/message:send \
+  -H "Authorization: Bearer local-test-token" \
+  -H "Content-Type: application/json" \
+  -d '{"message":{"role":"user","parts":[{"kind":"text","text":"hello"}]}}'
+```
+
 When deploying generic OpenClaw apps, use the same `openclaw_container_app_count` value that was used by the infrastructure workflow so the deploy workflow updates every numbered app that exists.
 
 ### Step 5: Configure Prod Environment Protection
@@ -113,9 +144,9 @@ In **Repository Settings -> Environments -> prod**, add required reviewers.
 Build the images locally:
 
 ```bash
-docker build -t azure-openclaw-hermes:test agents/hermes
-docker build -t azure-openclaw-analyst:test agents/analyst
-docker build -t azure-openclaw-openclaw:test agents/openclaw
+docker build -f agents/hermes/Dockerfile -t azure-openclaw-hermes:test .
+docker build -f agents/analyst/Dockerfile -t azure-openclaw-analyst:test .
+docker build -f agents/openclaw/Dockerfile -t azure-openclaw-openclaw:test .
 ```
 
 Run a local smoke test:

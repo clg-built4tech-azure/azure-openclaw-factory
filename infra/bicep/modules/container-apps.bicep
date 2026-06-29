@@ -25,6 +25,12 @@ resource containerApps 'Microsoft.App/containerApps@2024-03-01' = [for agentName
     managedEnvironmentId: acaEnv.id
     configuration: {
       activeRevisionsMode: 'Single'
+      dapr: {
+        enabled: true
+        appId: '${agentName}-${environmentSuffix}'
+        appPort: 8080
+        appProtocol: 'http'
+      }
       ingress: {
         external: true
         targetPort: 8080

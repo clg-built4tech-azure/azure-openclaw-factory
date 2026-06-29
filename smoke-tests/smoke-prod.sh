@@ -24,4 +24,15 @@ else
   exit 1
 fi
 
+echo "Checking A2A agent card at https://${PROD_FQDN}/.well-known/agent-card.json ..."
+CARD_STATUS=$(curl -sk -o /tmp/a2a-card-prod.json -w "%{http_code}" "https://${PROD_FQDN}/.well-known/agent-card.json" || true)
+
+if [[ "${CARD_STATUS}" == "200" ]] && grep -q '"messageSend"' /tmp/a2a-card-prod.json; then
+  echo "OK: Prod A2A agent card passed (HTTP ${CARD_STATUS})"
+else
+  echo "ERROR: Prod A2A agent card failed (HTTP ${CARD_STATUS})"
+  cat /tmp/a2a-card-prod.json || true
+  exit 1
+fi
+
 echo "=== Prod Smoke Test Complete ==="

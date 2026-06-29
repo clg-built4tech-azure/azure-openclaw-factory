@@ -42,7 +42,7 @@ jobs:
         run: |
           ACR_LOGIN_SERVER=$(az acr show --name "${ACR_NAME}" --query loginServer -o tsv)
           IMAGE="${ACR_LOGIN_SERVER}/${{ matrix.agent }}:${IMAGE_TAG}"
-          docker build --pull -t "${IMAGE}" "agents/${{ matrix.agent }}"
+          docker build --pull -f "agents/${{ matrix.agent }}/Dockerfile" -t "${IMAGE}" .
           docker push "${IMAGE}"
 
   deploy-dev:
@@ -71,6 +71,13 @@ jobs:
 
           APP="${{ matrix.agent }}-dev"
           IMAGE="${ACR_LOGIN_SERVER}/${{ matrix.agent }}:${IMAGE_TAG}"
+          A2A_PEER_NAMES="hermes,analyst"
+          COUNT="${{ inputs.openclaw_container_app_count }}"
+          if [ "${COUNT}" -gt 0 ]; then
+            for index in $(seq 1 "${COUNT}"); do
+              A2A_PEER_NAMES="${A2A_PEER_NAMES},openclaw-${index}"
+            done
+          fi
 
           az containerapp registry set \
             --name "${APP}" \
@@ -88,7 +95,7 @@ jobs:
             --name "${APP}" \
             --resource-group "${RESOURCE_GROUP_DEV}" \
             --image "${IMAGE}" \
-            --set-env-vars AGENT_NAME="${{ matrix.agent }}" PORT=8080 OPENCLAW_GATEWAY_PORT=19001 OPENCLAW_GATEWAY_TOKEN=secretref:openclaw-gateway-token
+            --set-env-vars AGENT_NAME="${{ matrix.agent }}" ENVIRONMENT_NAME=dev PORT=8080 OPENCLAW_GATEWAY_PORT=19001 OPENCLAW_GATEWAY_TOKEN=secretref:openclaw-gateway-token A2A_SHARED_TOKEN=secretref:openclaw-gateway-token A2A_USE_DAPR=true A2A_PEER_NAMES="${A2A_PEER_NAMES}"
 
       - name: Smoke test dev
         run: |
@@ -105,10 +112,10 @@ jobs:
     if: ${{ fromJSON(inputs.openclaw_container_app_count) > 0 }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Azure login
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -123,6 +130,10 @@ jobs:
 
           IMAGE="${ACR_LOGIN_SERVER}/openclaw:${IMAGE_TAG}"
           COUNT="${{ inputs.openclaw_container_app_count }}"
+          A2A_PEER_NAMES="hermes,analyst"
+          for peer_index in $(seq 1 "${COUNT}"); do
+            A2A_PEER_NAMES="${A2A_PEER_NAMES},openclaw-${peer_index}"
+          done
 
           for index in $(seq 1 "${COUNT}"); do
             APP="openclaw-${index}-dev"
@@ -143,7 +154,7 @@ jobs:
               --name "${APP}" \
               --resource-group "${RESOURCE_GROUP_DEV}" \
               --image "${IMAGE}" \
-              --set-env-vars AGENT_NAME="openclaw-${index}" PORT=8080 OPENCLAW_GATEWAY_PORT=19001 OPENCLAW_GATEWAY_TOKEN=secretref:openclaw-gateway-token
+              --set-env-vars AGENT_NAME="openclaw-${index}" ENVIRONMENT_NAME=dev PORT=8080 OPENCLAW_GATEWAY_PORT=19001 OPENCLAW_GATEWAY_TOKEN=secretref:openclaw-gateway-token A2A_SHARED_TOKEN=secretref:openclaw-gateway-token A2A_USE_DAPR=true A2A_PEER_NAMES="${A2A_PEER_NAMES}"
 
             FQDN=$(az containerapp show \
               --name "${APP}" \
@@ -181,6 +192,13 @@ jobs:
 
           APP="${{ matrix.agent }}-prod"
           IMAGE="${ACR_LOGIN_SERVER}/${{ matrix.agent }}:${IMAGE_TAG}"
+          A2A_PEER_NAMES="hermes,analyst"
+          COUNT="${{ inputs.openclaw_container_app_count }}"
+          if [ "${COUNT}" -gt 0 ]; then
+            for index in $(seq 1 "${COUNT}"); do
+              A2A_PEER_NAMES="${A2A_PEER_NAMES},openclaw-${index}"
+            done
+          fi
 
           az containerapp registry set \
             --name "${APP}" \
@@ -198,7 +216,7 @@ jobs:
             --name "${APP}" \
             --resource-group "${RESOURCE_GROUP_PROD}" \
             --image "${IMAGE}" \
-            --set-env-vars AGENT_NAME="${{ matrix.agent }}" PORT=8080 OPENCLAW_GATEWAY_PORT=19001 OPENCLAW_GATEWAY_TOKEN=secretref:openclaw-gateway-token
+            --set-env-vars AGENT_NAME="${{ matrix.agent }}" ENVIRONMENT_NAME=prod PORT=8080 OPENCLAW_GATEWAY_PORT=19001 OPENCLAW_GATEWAY_TOKEN=secretref:openclaw-gateway-token A2A_SHARED_TOKEN=secretref:openclaw-gateway-token A2A_USE_DAPR=true A2A_PEER_NAMES="${A2A_PEER_NAMES}"
 
       - name: Smoke test prod
         run: |
@@ -216,10 +234,10 @@ jobs:
     environment: prod
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Azure login
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -234,6 +252,10 @@ jobs:
 
           IMAGE="${ACR_LOGIN_SERVER}/openclaw:${IMAGE_TAG}"
           COUNT="${{ inputs.openclaw_container_app_count }}"
+          A2A_PEER_NAMES="hermes,analyst"
+          for peer_index in $(seq 1 "${COUNT}"); do
+            A2A_PEER_NAMES="${A2A_PEER_NAMES},openclaw-${peer_index}"
+          done
 
           for index in $(seq 1 "${COUNT}"); do
             APP="openclaw-${index}-prod"
@@ -254,7 +276,7 @@ jobs:
               --name "${APP}" \
               --resource-group "${RESOURCE_GROUP_PROD}" \
               --image "${IMAGE}" \
-              --set-env-vars AGENT_NAME="openclaw-${index}" PORT=8080 OPENCLAW_GATEWAY_PORT=19001 OPENCLAW_GATEWAY_TOKEN=secretref:openclaw-gateway-token
+              --set-env-vars AGENT_NAME="openclaw-${index}" ENVIRONMENT_NAME=prod PORT=8080 OPENCLAW_GATEWAY_PORT=19001 OPENCLAW_GATEWAY_TOKEN=secretref:openclaw-gateway-token A2A_SHARED_TOKEN=secretref:openclaw-gateway-token A2A_USE_DAPR=true A2A_PEER_NAMES="${A2A_PEER_NAMES}"
 
             FQDN=$(az containerapp show \
               --name "${APP}" \

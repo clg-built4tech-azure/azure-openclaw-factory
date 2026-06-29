@@ -7,9 +7,9 @@ ARG OPENCLAW_VERSION=2026.6.10
 RUN npm install -g "openclaw@${OPENCLAW_VERSION}" \
   && command -v openclaw
 
-# Copy agent source and config
-COPY src/ ./src/
-COPY config/ ./config/
+# Copy shared agent source and agent-specific config
+COPY agents/common/src/ ./src/
+COPY agents/hermes/config/ ./config/
 
 # Default agent entrypoint
 ENV AGENT_NAME=hermes
